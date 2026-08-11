@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #9c9c9c;
+    font-family: "Comic Sans MS", "Comic Sans", cursive, sans-serif;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .container {
+    background-color: #c0c0c0;
+    border: 4px outset #ffffff;
+    box-shadow: 6px 6px 0px #000000;
+    padding: 30px 20px;
+    width: 90%;
+    max-width: 420px;
+    text-align: center;
+  }
+
+  marquee {
+    background-color: #000000;
+    color: #00ff00;
+    font-size: 22px;
+    font-weight: bold;
+    padding: 10px 0;
+    border: 2px inset #ffffff;
+    margin-bottom: 25px;
+  }
+
+  #startBtn {
+    font-family: "Comic Sans MS", "Comic Sans", cursive, sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+    color: #000000;
+    background-color: #ff00ff;
+    border: 4px outset #ffffff;
+    padding: 12px 40px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  #startBtn:active {
+    border-style: inset;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <marquee behavior="scroll" direction="left" scrollamount="5">Hi Daddy Zach</marquee>
+  <button id="startBtn">Start</button>
+</div>
+
+<script>
+  document.getElementById('startBtn').addEventListener('click', function () {
+    window.location.href = 'photo.html';
+  });
+</script>
+
+</body>
+</html>
