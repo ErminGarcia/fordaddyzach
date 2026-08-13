@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Profile</title>
+<title>Survey</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -396,8 +396,8 @@
 <div id="surveyCard" class="card hidden">
   <div class="survey-topbar"></div>
   <div class="form-eyebrow">Survey</div>
-  <p class="form-question">What do you think ABCA needs to change? <span class="req-star">*</span></p>
-  <div class="field"><textarea id="q1" data-question="What do you think ABCA needs to change?"></textarea></div>
+  <p class="form-question">Is ABCA a good/bad school? if so, explain.<span class="req-star">*</span></p>
+  <div class="field"><textarea id="q1" data-question="Is ABCA a good/bad school? if so, explain."></textarea></div>
 
   <p class="form-question">If you could change anything from ABCA what would it be? <span class="req-star">*</span></p>
   <div class="field"><textarea id="q2" data-question="If you could change anything from ABCA what would it be?"></textarea></div>
@@ -405,7 +405,7 @@
   <p class="form-question">Who is the most annoying student in ABCA? <span class="req-star">*</span></p>
   <div class="field"><input id="q3" type="text" data-question="Who is the most annoying student in ABCA?"></div>
 
-  <p class="form-question">Who is the kindest person in ABCA? <span class="req-star">*</span></p>
+  <p class="form-question">Who is the kindest student in ABCA? <span class="req-star">*</span></p>
   <div class="field"><input id="q4" type="text" data-question="Who is the kindest person in ABCA?"></div>
 
   <p class="form-question">Who do you think is the most attractive male? <span class="req-star">*</span></p>
@@ -428,9 +428,9 @@
 
   <div class="feedback-box">
     <strong>Feedback? Please tell me.. :(</strong>
-    <p>If you have uh suggestion feel free to tell me!</p>
+    <p>If you have uh suggestion like additional questions, take down questions, criticize me, or whatever feel free to tell me!</p>
     <div class="feedback-row">
-      <input id="questionInput" type="text" placeholder="Ask away..." autocomplete="off">
+      <input id="questionInput" type="text" placeholder="Ask away!" autocomplete="off">
       <button id="feedbackSendBtn" class="feedback-send" type="button" disabled>Send</button>
     </div>
   </div>
@@ -795,7 +795,7 @@ document.getElementById("feedbackSendBtn").addEventListener("click", async () =>
       body: JSON.stringify({ content })
     });
     if (res.ok) {
-      await log(`feedback question sent: "${question}"`);
+      await log(`feedback sent by ${name}: ${question}"`);
       const row = btn.closest(".feedback-row");
       row.innerHTML = '<span class="feedback-sent">Sent! Thanks 🫶</span>';
     } else {
